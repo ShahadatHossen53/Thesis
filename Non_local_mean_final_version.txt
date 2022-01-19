@@ -1,0 +1,97 @@
+X = imread('Image.jpg');
+X = rgb2gray(X);
+
+n_img = imnoise(X, 'salt & pepper', 0.7);
+psnr_value = cal_psnr(X, n_img);
+fprintf("Initial PSNR value = %0.3f\n", psnr_value);
+
+
+figure(1);
+imshow(X);
+
+figure(2);
+imshow(n_img);
+tic;
+
+Xprime = p_3_algo(n_img);
+toc;
+figure;
+imshow(Xprime);
+psnr_value = cal_psnr(X, Xprime);
+fprintf("Denoise PSNR value = %0.3f\n", psnr_value);
+
+function Xprime_mean = p_3_algo(n_img)
+    Xprime_mean = n_img;
+    pad_img = padarray(n_img, [5 5], 'symmetric', 'both');
+    isNoisePad = zeros(size(pad_img));
+    isNoisePad(pad_img==0 | pad_img==255) = 1;
+    
+    [M, N] = size(pad_img);
+
+    s = 5; %11x11
+    for i=s+1:1:M-s
+        for j=s+1:1:N-s
+            if isNoisePad(i, j)==1
+                main_window = pad_img(i-s:i+s, j-s:j+s);
+                [mwm, mwn] =  size(main_window);
+                ss = 2;
+                w_size = (ss*2)+1;
+                similar_window = zeros(w_size);
+                max_psnr = 0;
+                
+                for ii=ss+1:mwm-ss
+                    for jj=ss+1:mwn-ss
+                        ci = floor(mwm/2);
+                        if (ci ~= ii && ci~=jj)
+                            center_window = main_window(ci-ss:ci+ss, ci-ss:ci+ss);
+                            search_window = main_window(ii-ss:ii+ss, jj-ss:jj+ss);
+                            temp_psnr = cal_psnr(search_window, center_window);
+                            if max_psnr<temp_psnr
+                                max_psnr = temp_psnr;
+                                similar_window = search_window;
+                            end
+                        end
+                    end
+                end
+                non_noise = [];
+                
+                for ii=1:w_size
+                    for jj=1:w_size
+                        if similar_window(ii, jj) ~=0 && similar_window(ii, jj) ~=255
+                            non_noise(end+1) =  similar_window(ii, jj);
+                        end
+                    end
+                end
+                if ~isempty(non_noise)
+                    Xprime_mean(i-s,j-s) = median(non_noise);
+                end
+            end   
+        end
+    end    
+    noise_values =  zeros(size(Xprime_mean));
+    noise_values(Xprime_mean==0 | Xprime_mean==255) = 1;
+    total_noise = sum(sum(noise_values));
+    if total_noise>=1
+        Xprime_mean = p_3_algo(Xprime_mean);
+    end
+    
+end
+
+
+function result = cal_psnr(i1, i2)
+    mse_value = cal_mse(i1, i2);
+    result = 10*(log10((255*255)/mse_value));
+end
+
+function mse = cal_mse(I1, I2)
+    ti1 = double(I1(:));
+    ti2 = double(I2(:));
+    diff = ti1-ti2;
+    sq_diff = diff.*diff;
+    summ = sum(sum(sq_diff));
+    [R,C] = size(I1);
+    mse = summ/(R*C);
+end
+
+
+
